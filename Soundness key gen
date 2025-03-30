@@ -1,0 +1,19 @@
+name: Generate Soundness Key
+on: [workflow_dispatch] # Manual trigger
+jobs:
+  generate-key:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Install soundness-cli
+        run: |
+          curl -sSL https://raw.githubusercontent.com/soundnesslabs/soundness-layer/main/soundnessup/install | bash
+      - name: Generate key pair
+        run: |
+          /path/to/soundness-cli generate-key --name my-key --passphrase "" > key_output.txt
+      - name: Upload key output
+        uses: actions/upload-artifact@v4
+        with:
+          name: key-output
+          path: key_output.txt
