@@ -376,9 +376,14 @@ fn import_key(name: &str) -> Result<()> {
 
     // Convert mnemonic to secret key
     let secret_key_bytes = mnemonic.to_entropy();
-    let secret_key_array: [u8; 32] = secret_key_bytes.clone()
-        .try_into()
-        .map_err(|_| anyhow::anyhow!("Invalid secret key length"))?;
+    let secret_key_array = match secret_key_bytes.len() {
+        16 | 32 => {
+            let mut tmp: [u8; 32] = [0; 32];
+            tmp[..secret_key_bytes.len()].copy_from_slice(&secret_key_bytes);
+            anyhow::Ok(tmp)
+        }
+        _ => Err(anyhow::anyhow!("Invalid secret key length")),
+    }?;
 
     // Create signing key and get public key
     let signing_key = SigningKey::from_bytes(&secret_key_array);
