@@ -1,4 +1,29 @@
-# Soundness CLI
+# Soundness CLI🔈 Soundness Testnet Registration
+🎁 Potensial Reward For All Users
+
+➖Register
+https://soundness.xyz/
+➖Submit Email
+➖Done
+
+➖Generate Your Key here :
+https://github.com/SoundnessLabs/soundness-layer/tree/main/soundness-cli
+➖Save Phrase & Public Keys
+➖Join Discord & Verify
+➖Submit your key on #testnet-access
+➖Done
+
+🔖 Tutorial for Codespace Users
+
+➖For install Rust and Cargo
+curl --proto '=https' --tlsv1.2 -sSf
+https://sh.rustup.rs | sh
+
+🔖 After it run this 
+source $HOME/.cargo/env
+
+🔔 Source :
+https://x.com/SoundnessLabs/status/1902389758527152586
 
 A command-line interface tool for interacting with Soundness Layer testnet.
 
