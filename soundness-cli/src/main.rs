@@ -375,11 +375,12 @@ fn import_key(name: &str) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Invalid mnemonic phrase: {}", e))?;
 
     // Convert mnemonic to secret key
-    let secret_key_bytes = mnemonic.to_entropy();
-    let secret_key_array: [u8; 32] = secret_key_bytes.clone()
+    let mut entropy = mnemonic.to_entropy();
+    let hashed_entropy = Sha256::digest(&entropy);
+    let secret_key_array: [u8; 32] = hashed_entropy
         .try_into()
-        .map_err(|_| anyhow::anyhow!("Invalid secret key length"))?;
-
+        .map_err(|_| anyhow::anyhow!("Invalid hashed secret key length"))?;
+    
     // Create signing key and get public key
     let signing_key = SigningKey::from_bytes(&secret_key_array);
     let verifying_key = signing_key.verifying_key();
