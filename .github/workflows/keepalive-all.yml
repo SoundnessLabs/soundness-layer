@@ -5,10 +5,6 @@ on:
     - cron: '0 */6 * * *' # jalan tiap 6 jam
   workflow_dispatch: # bisa dijalankan manual
 
-permissions:
-  contents: read
-  codespaces: write
-
 jobs:
   keepalive:
     runs-on: ubuntu-latest
@@ -19,7 +15,8 @@ jobs:
           curl -s -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
                -H "Accept: application/vnd.github+json" \
                https://api.github.com/user/codespaces \
-          | jq -r '.codespaces[]?.name' | while read cs; do
+          | jq -r '.codespaces[].name' \
+          | while read cs; do
               echo "Memperbarui $cs..."
               curl -X POST \
                    -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
