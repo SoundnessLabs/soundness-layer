@@ -1,0 +1,24 @@
+name: Ping Codespace Daily
+
+on:
+  schedule:
+    - cron: "0 2 * * *" 
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install GitHub CLI
+        run: sudo apt-get update && sudo apt-get install gh -y
+
+      - name: Auth GitHub CLI
+        run: echo "${{ secrets.GH_TOKEN }}" | gh auth login --with-token
+
+      - name: List Codespaces
+        run: gh codespace list
+
+      - name: Ping Codespace
+        run: |
+          CODESPACE_NAME="musical-umbrella-694xp6vj96ppfqpj"
+          gh codespace ssh -c "$CODESPACE_NAME" -d "echo 'Ping at $(date)'"
