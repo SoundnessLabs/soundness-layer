@@ -2,7 +2,7 @@ name: Ping Codespace Daily
 
 on:
   schedule:
-    - cron: "0 2 * * *" # Setiap hari jam 02:00 UTC
+    - cron: "0 2 * * *" 
   workflow_dispatch:
 
 jobs:
