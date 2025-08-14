@@ -5,28 +5,26 @@ use aes_gcm::{
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use bip39;
+use dirs;
 use clap::{Parser, Subcommand};
 use ed25519_dalek::{Signer, SigningKey};
 use indicatif::{ProgressBar, ProgressStyle};
-use once_cell::sync::Lazy;
 use pbkdf2::pbkdf2_hmac_array;
 use rand::{rngs::OsRng, RngCore};
 use rpassword::prompt_password;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use sha2::Sha256;
+use zeroize::Zeroize;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::Mutex;
 use std::time::Duration;
 
 const SALT_LENGTH: usize = 32;
 const NONCE_LENGTH: usize = 12;
 const KEY_LENGTH: usize = 32;
 const ITERATIONS: u32 = 100_000;
-
-static PASSWORD_CACHE: Lazy<Mutex<Option<(String, String)>>> = Lazy::new(|| Mutex::new(None));
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -180,8 +178,15 @@ fn create_progress_bar(message: &str) -> ProgressBar {
     pb
 }
 
+fn get_key_store_path() -> Result<PathBuf> {
+    let home_dir = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Failed to find home directory"))?;
+    let soundness_dir = home_dir.join(".soundness");
+    fs::create_dir_all(&soundness_dir).context("Failed to create .soundness directory")?;
+    Ok(soundness_dir.join("key_store.json"))
+}
+
 fn load_key_store() -> Result<KeyStore> {
-    let key_store_path = PathBuf::from("key_store.json");
+    let key_store_path = get_key_store_path()?;
     if key_store_path.exists() {
         let contents = fs::read_to_string(&key_store_path)?;
         let key_store: KeyStore = serde_json::from_str(&contents)?;
@@ -194,7 +199,7 @@ fn load_key_store() -> Result<KeyStore> {
 }
 
 fn save_key_store(key_store: &KeyStore) -> Result<()> {
-    let key_store_path = PathBuf::from("key_store.json");
+    let key_store_path = get_key_store_path()?;
     let contents = serde_json::to_string_pretty(key_store)?;
     fs::write(key_store_path, contents)?;
     Ok(())
@@ -319,15 +324,8 @@ fn list_keys() -> Result<()> {
     Ok(())
 }
 
-// Calculate hash of key store contents
-fn calculate_key_store_hash(key_store: &KeyStore) -> String {
-    let serialized = serde_json::to_string(key_store).unwrap_or_default();
-    format!("{:x}", Sha256::digest(serialized.as_bytes()))
-}
-
 fn sign_payload(payload: &[u8], key_name: &str) -> Result<Vec<u8>> {
     let key_store = load_key_store()?;
-    let key_store_hash = calculate_key_store_hash(&key_store);
 
     let key_pair = key_store
         .keys
@@ -339,38 +337,21 @@ fn sign_payload(payload: &[u8], key_name: &str) -> Result<Vec<u8>> {
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Secret key not found for '{}'", key_name))?;
 
-    // Create a new scope for the password guard to ensure it's dropped properly
-    let password = {
-        let mut password_guard = PASSWORD_CACHE.lock().unwrap();
+    let mut password = prompt_password("Enter password to decrypt the secret key: ")
+        .map_err(|e| anyhow::anyhow!("Failed to read password: {}", e))?;
 
-        if let Some((stored_password, stored_hash)) = password_guard.as_ref() {
-            // Check if key store has changed
-            if stored_hash != &key_store_hash {
-                *password_guard = None;
-                drop(password_guard);
-                return sign_payload(payload, key_name);
-            }
-            stored_password.clone()
-        } else {
-            // If no password is stored, prompt for it
-            let new_password = prompt_password("Enter password to decrypt the secret key: ")
-                .map_err(|e| anyhow::anyhow!("Failed to read password: {}", e))?;
-
-            // Try to decrypt with the password to verify it's correct
-            if let Err(e) = decrypt_secret_key(encrypted_secret, &new_password) {
-                anyhow::bail!("Invalid password: {}", e);
-            }
-
-            // Store the password and key store hash
-            *password_guard = Some((new_password.clone(), key_store_hash));
-            new_password
-        }
-    }; // password_guard is dropped here
-
-    // Only show the progress bar after we have the password
     let pb = create_progress_bar("✍️  Signing payload...");
 
-    let secret_key_bytes = decrypt_secret_key(encrypted_secret, &password)?;
+    let secret_key_bytes = match decrypt_secret_key(encrypted_secret, &password) {
+        Ok(bytes) => bytes,
+        Err(_) => {
+            password.zeroize();
+            anyhow::bail!("Invalid password or corrupted key");
+        }
+    };
+
+    password.zeroize();
+
     let secret_key_array: [u8; 32] = secret_key_bytes
         .try_into()
         .map_err(|_| anyhow::anyhow!("Invalid secret key length"))?;
@@ -394,17 +375,24 @@ fn get_public_key(key_name: &str) -> Result<Vec<u8>> {
 /// Check if a string looks like a Walrus Blob ID vs a file path
 /// Blob IDs are typically base64-like strings without path separators
 fn is_blob_id(input: &str) -> bool {
-    // Check if it contains path separators - if so, it's likely a file path
+    // If a file with this name exists and it's not a directory, treat it as a file path.
+    let path = PathBuf::from(input);
+    if path.exists() && path.is_file() {
+        return false;
+    }
+
+    // Check for path separators, which are unlikely in a blob ID.
     if input.contains('/') || input.contains('\\') {
         return false;
     }
 
-    // Check if it looks like a base64 string (alphanumeric + / and +, possibly with = padding)
-    // and is reasonably long (blob IDs are typically 40+ characters)
-    input.len() > 20
-        && input.chars().all(|c| {
-            c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=' || c == '-' || c == '_'
-        })
+    // A simple heuristic: blob IDs are long and look like base64.
+    // This is not foolproof, but it's better than before.
+    let is_base64_like = input.len() > 30 && input.chars().all(|c| {
+        c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=' || c == '-' || c == '_'
+    });
+
+    is_base64_like
 }
 
 #[derive(Debug, Deserialize)]
@@ -610,40 +598,31 @@ async fn main() -> Result<()> {
                 }
             }
 
-            // Create canonical string for signing
+            // Create canonical JSON string for signing
+            let mut canonical_map = std::collections::BTreeMap::new();
+
             let proof_value = request_body
                 .get("proof")
                 .or_else(|| request_body.get("proof_blob_id"))
-                .unwrap_or(&serde_json::Value::Null)
-                .as_str()
+                .and_then(|v| v.as_str())
                 .unwrap_or("");
+            canonical_map.insert("proof", proof_value);
+            canonical_map.insert("proof_filename", &proof_filename);
 
-            let elf_value = request_body
-                .get("elf")
-                .or_else(|| request_body.get("elf_blob_id"))
-                .unwrap_or(&serde_json::Value::Null)
-                .as_str()
-                .unwrap_or("");
+            if !elf_filename.is_empty() {
+                let elf_value = request_body
+                    .get("elf")
+                    .or_else(|| request_body.get("elf_blob_id"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                canonical_map.insert("elf", elf_value);
+                canonical_map.insert("elf_filename", &elf_filename);
+            }
 
-            let canonical_string = if !elf_filename.is_empty() {
-                format!(
-                    "proof:{}\nelf:{}\nproof_filename:{}\nelf_filename:{}\nproving_system:{}",
-                    proof_value,
-                    elf_value,
-                    proof_filename,
-                    elf_filename,
-                    format!("{:?}", proving_system).to_lowercase()
-                )
-            } else {
-                format!(
-                    "proof:{}\nproof_filename:{}\nproving_system:{}",
-                    proof_value,
-                    proof_filename,
-                    format!("{:?}", proving_system).to_lowercase()
-                )
-            };
+            let proving_system_str = format!("{:?}", proving_system).to_lowercase();
+            canonical_map.insert("proving_system", &proving_system_str);
 
-            request_body["canonical_string"] = serde_json::Value::String(canonical_string.clone());
+            let canonical_string = serde_json::to_string(&canonical_map)?;
 
             // Sign the canonical string
             let signature = sign_payload(canonical_string.as_bytes(), &key_name)?;
