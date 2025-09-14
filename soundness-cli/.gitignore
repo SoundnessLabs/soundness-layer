@@ -1,2 +1,5 @@
 key_store.json
 .soundness/
+target/
+Cargo.lock
+.env

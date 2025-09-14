@@ -1,211 +1,501 @@
 # Soundness CLI
 
-A command-line interface tool for interacting with Soundness Layer testnet.
+Command-line interface tool for interacting with the Soundness Layer. The CLI provides secure key management, zero-knowledge proof submission, and comprehensive blockchain integration capabilities.
+
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Architecture](#architecture)
+- [Usage](#usage)
+- [Command Reference](#command-reference)
+- [Security](#security)
+- [Configuration](#configuration)
+- [Examples](#examples)
+- [Troubleshooting](#troubleshooting)
+
+## Features
+
+### Core Capabilities
+- **Cryptographic Key Management**: Generate, import, and manage Ed25519 key pairs with secure local storage
+- **Zero-Knowledge Proof Submission**: Submit proofs from multiple proving systems to the Soundness Layer
+- **Multi-Storage Support**: Handle both local files and Walrus distributed storage blob IDs
+- **Blockchain Integration**: Direct integration with Sui blockchain for on-chain proof verification
+- **Security-First Design**: AES-256-GCM encryption with PBKDF2 key derivation
+
+### Supported Proving Systems
+- **SP1**: RISC-V based ZK-VM for general-purpose computation
+- **Ligetron**: High-performance proving system optimized for speed
+- **RISC Zero**: General-purpose zero-knowledge virtual machine
+- **Noir**: Domain-specific language for zero-knowledge proofs
+- **StarkNet**: Ethereum Layer 2 scaling solution with STARK proofs
+- **Miden VM**: Stack-based zero-knowledge virtual machine
+
+### Predefined Games
+- **Eight Queens Puzzle**: Classic constraint satisfaction problem
+- **Tic-Tac-Toe**: Strategic two-player game implementation
 
 ## Installation
 
-**Prerequisite:** Ensure you have the [Rust toolchain](https://rustup.rs/) installed.
+### Prerequisites
+- Rust toolchain (1.70.0 or later)
+- Git (for source installation)
 
-We offer two methods for installing the Soundness CLI: using our `soundnessup` installer (recommended) or building from source manually.
+### Method 1: Quick Install via soundnessup (Recommended)
 
-
-### Recommended: Quick Install via `soundnessup`
-
-The `soundnessup` tool manages your Soundness CLI installation and makes updates easy.
-
-**1. Run the installer script:**
-This command downloads and runs the `soundnessup` installer.
+The `soundnessup` installer provides automated installation and update management.
 
 ```bash
+# Download and run the installer
 curl -sSL https://raw.githubusercontent.com/soundnesslabs/soundness-layer/main/soundnessup/install | bash
-```
 
-**2. Update your shell environment:**
-After installation, you need to update your current shell's PATH to recognize the `soundnessup` command. Either restart your terminal or run one of the following commands:
-```bash
-# For Bash:
-source ~/.bashrc
+# Update shell environment
+source ~/.bashrc  # For Bash
+source ~/.zshenv  # For Zsh
 
-# For Zsh:
-source ~/.zshenv
-```
-
-**3. Install the CLI:**
-Now, use `soundnessup` to install the Soundness CLI:
-
-```bash
+# Install Soundness CLI
 soundnessup install
-```
 
-You can later update the CLI to the latest version by running:
-
-```bash
+# Update to latest version
 soundnessup update
 ```
 
-### Docker Installation
-
-You can also build and run the CLI using Docker:
+### Method 2: Docker Installation
 
 ```bash
 # Build the Docker image
 docker compose build
 
-# Run the CLI (replace [command] with any soundness-cli command)
-docker compose run --rm soundness-cli [command]
+# Run CLI commands through Docker
+docker compose run --rm soundness-cli [command] [options]
 
-# Example: Generate a new key pair
-docker compos
+# Example usage
+docker compose run --rm soundness-cli generate-key --name production-key
+```
 
-### Manual Installation (from Source)
-
-If you prefer to install from source, you can use Cargo.
-
-**Build and install:**
-Navigate to the `soundness-cli` directory and run:
+### Method 3: Source Installation
 
 ```bash
+# Clone repository
+git clone https://github.com/soundnesslabs/soundness-layer.git
+cd soundness-layer/soundness-cli
+
+# Build and install
 cargo install --path .
+
+# Verify installation
+soundness-cli --version
 ```
 
-curl -sSL https://raw.githubusercontent.com/soundnesslabs/soundness-layer/main/soundnessup/install | bash
+## Architecture
 
-## Testnet Instructions
+The Soundness CLI is built with a modular architecture consisting of several key components:
 
-Welcome to the Soundness Layer Testnet! Follow these steps to get started with playing ZK games and verifying proofs on-chain.
+### Core Modules
 
-### Step 1: Get Access
+#### CLI Module (`cli.rs`)
+Defines the command-line interface structure using the `clap` crate. Provides comprehensive help text and argument validation for all commands and subcommands.
 
-To join the testnet, you'll need either the `Onboarded` role from our Discord or a special invite code.
+#### Cryptography Module (`crypto.rs`)
+Implements all cryptographic operations including:
+- Ed25519 key pair generation and management
+- AES-256-GCM encryption for key storage
+- PBKDF2 key derivation with 600,000 iterations
+- Digital signature generation and verification
+- BIP39 mnemonic phrase handling
 
-1.  **Join our Discord:** Hop into the [Soundness Labs Discord](https://discord.gg/SoundnessLabs) and get the `Onboarded` role to participate.
-2.  **Follow us on X:** Keep an eye on our [X account](https://x.com/SoundnessLabs). We regularly post invite codes for our community.
+#### Key Store Module (`keystore.rs`)
+Manages persistent storage of encrypted key pairs:
+- JSON-based local key storage
+- Atomic file operations for data integrity
+- Key import/export functionality
+- Multiple keystore support
 
-### Step 2: Prepare Your Key
+#### Client Module (`client.rs`)
+Handles network communication with the Soundness Layer:
+- HTTP client implementation with proper error handling
+- Automatic detection of file paths vs. blob IDs
+- Request signing and authentication
+- Response parsing and formatting
 
-Your key is essential for signing proof submissions and identifying you on the network.
+#### Types Module (`types.rs`)
+Defines all data structures and enums used throughout the application:
+- Proving system enumeration with validation
+- Game type definitions
+- Key pair and encryption structures
+- Server response parsing
 
-**For users with the `Onboarded` role:**
-You should already have a key that you generated and submitted during the onboarding process. Make sure you have it ready. You do not need to generate a new one.
+#### Utilities Module (`utils.rs`)
+Provides helper functions for:
+- Progress bar display during operations
+- Blob ID detection and validation
+- Server response formatting
+- Error handling utilities
 
-**For users with an invite code:**
-If you are joining with a new invite code, you will need to generate a new key pair. Run the following command, replacing `your-key-name` with a name of your choice:
+### Security Architecture
 
-```bash
-soundness-cli generate-key --name your-key-name
-```
-**Important:** A mnemonic phrase will be displayed. **Save it in a safe place!** This is the only way to recover your key if it's lost.
+The CLI implements multiple layers of security:
 
-### Step 3: Play a Game and Send Your Proof
-
-Once you have your key and have won a game, you can submit your proof for verification.
-
-Use the `send` command with the following format:
-
-```bash
-soundness-cli send --proof-file <proof-blob-id> --game <game-name> --key-name <your-key-name> --proving-system ligetron --payload '<json-payload>'
-```
-
-**Command Breakdown:**
-
-* `--proof-file` (`-p`): The unique Walrus Blob ID for your proof, which you receive after winning a game.
-* `--game` (`-g`): The name of the game you played (e.g., `8queens` or `tictactoe`).
-* `--key-name` (`-k`): The name you chose for your key in Step 2.
-* `--proving-system` (`-s`): The ZK proving system. For our current testnet games, this is `ligetron`.
-* `--payload` (`-d`): A JSON string with the specific inputs required to verify your Ligetron proof.
-
-Get ready to play, prove, and verify on the Soundness Layer!
+1. **Key Storage**: Private keys are encrypted using AES-256-GCM with random nonces
+2. **Key Derivation**: PBKDF2-HMAC-SHA256 with 600,000 iterations and 32-byte salts
+3. **Authentication**: Ed25519 digital signatures for all server communications
+4. **Memory Management**: Secure password caching with automatic invalidation
+5. **Input Validation**: Comprehensive validation of all user inputs and file formats
 
 ## Usage
 
-### Generating a Key Pair
+### Initial Setup
 
-To generate a new key pair for signing requests:
-
-```bash
-soundness-cli generate-key --name my-key
-```
-
-This will:
-
-1. Generate a new Ed25519 key pair
-2. Store the key pair securely in a local `key_store.json` file
-3. Display the public key in base64 format
-
-The public key will be displayed in the format:
+Before using the CLI, you need to generate or import a cryptographic key pair:
 
 ```bash
-✅ Generated new key pair 'my-key'
-🔑 Public key: <base64-encoded-public-key>
+# Generate a new key pair
+soundness-cli generate-key --name my-production-key
+
+# Import existing key from mnemonic
+soundness-cli import-key --name imported-key --mnemonic "word1 word2 ... word24"
 ```
 
-### Importing a Key Pair
+### Basic Operations
 
-If you saved your mnemonic previously, you can import it to `key_store.json` by using following command:
+#### Key Management
+
+List all available keys:
+```bash
+soundness-cli list-keys
+```
+
+Display mnemonic for recovery:
+```bash
+soundness-cli show-mnemonic --name my-production-key
+```
+
+#### Proof Submission
+
+Submit proof with local files:
+```bash
+soundness-cli send \
+    --proof-file ./proofs/my-proof.bin \
+    --elf-file ./programs/my-program.elf \
+    --key-name my-production-key \
+    --proving-system sp1
+```
+
+Submit proof using Walrus blob IDs:
+```bash
+soundness-cli send \
+    --proof-file blob_abc123xyz789 \
+    --elf-file blob_def456uvw012 \
+    --key-name my-production-key \
+    --proving-system risc0
+```
+
+Submit proof for predefined games:
+```bash
+soundness-cli send \
+    --proof-file ./game-proof.bin \
+    --game 8-queens \
+    --key-name my-production-key \
+    --proving-system ligetron \
+    --payload '{"player": "alice", "difficulty": "hard"}'
+```
+
+### Advanced Usage
+
+
+```
+
+#### Working with Multiple Keystores
 
 ```bash
-soundness-cli import-key --name <name> --mnemonic "<mnemonic>"
+# List keys from specific keystore file
+soundness-cli load-key-store --path ./production-keys.json list-keys
+
+# Show mnemonic from custom keystore
+soundness-cli load-key-store --path ./backup-keys.json show-mnemonic --name backup-key
 ```
 
-If it was successful you'll get:
+## Command Reference
+
+### Global Options
+
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--endpoint` | `-e` | Soundness Layer API endpoint | `https://testnet.soundness.xyz` |
+| `--help` | `-h` | Show help information | - |
+| `--version` | `-V` | Show version information | - |
+
+### Key Management Commands
+
+#### generate-key
+Generate a new Ed25519 key pair with secure local storage.
 
 ```bash
-✅ Imported key pair '<imported-key-name>'
-🔑 Public key: <base64-encoded-public-key>
+soundness-cli generate-key --name <KEY_NAME>
 ```
 
-### Listing Key Pairs
+**Options:**
+- `--name` / `-n`: Unique identifier for the key pair (required)
 
-To view all stored key pairs:
+**Security Notes:**
+- Private key is encrypted with user-provided password
+- Displays BIP39 mnemonic phrase for recovery
+- Stores public key in base64 format for easy sharing
+
+#### import-key
+Import an existing key pair from a BIP39 mnemonic phrase.
+
+```bash
+soundness-cli import-key --name <KEY_NAME> --mnemonic "<MNEMONIC_PHRASE>"
+```
+
+**Options:**
+- `--name` / `-n`: Name for the imported key pair (required)
+- `--mnemonic` / `-m`: 24-word BIP39 mnemonic phrase (required)
+
+#### list-keys
+Display all stored key pairs with their public keys.
 
 ```bash
 soundness-cli list-keys
 ```
 
-This will display all available key pairs and their associated public keys.
-
-### Sending Proofs
-
-The CLI supports two ways to send proofs to the server:
-
-#### 1. Using Local Files
-
-To send a proof and ELF Program file using local file paths:
-
-```bash
-soundness-cli send --proof-file path/to/proof.proof --elf-file path/to/program.elf --key-name my-key
+**Output Format:**
+```
+Available key pairs:
+- production-key (Public key: base64_encoded_public_key)
+- test-key (Public key: base64_encoded_public_key)
 ```
 
-#### 2. Using Files Stored as Walrus Blob IDs
-
-To send a proof and ELF Program file using Walrus Blob IDs (when files are already stored in Walrus):
-
-```bash
-soundness-cli send --proof-file <proof-walrus-blob-id> --elf-file <elf-program-walrus-blob-id> --key-name my-key
-```
-
-The CLI automatically detects whether the input is a file path or a Walrus Blob ID.
-
-#### Mixed Usage
-
-You can also mix file paths and Walrus Blob IDs:
+#### show-mnemonic
+Display the BIP39 mnemonic phrase for a specific key pair.
 
 ```bash
-# Proof from file, ELF from Walrus storage
-soundness-cli send --proof-file path/to/proof.proof --elf-file <walrus-blob-id> --key-name my-key
-
-# Proof from Walrus storage, ELF from file  
-soundness-cli send --proof-file <walrus-blob-id> --elf-file path/to/program.elf --key-name my-key
+soundness-cli show-mnemonic --name <KEY_NAME>
 ```
 
-#### Proving Systems
+**Options:**
+- `--name` / `-n`: Name of the key pair (required)
 
-You can specify the proving system to use:
+**Security:**
+- Requires password to decrypt the private key
+- Displays warning about mnemonic security
+
+### Proof Submission Command
+
+#### send
+Submit a zero-knowledge proof to the Soundness Layer for verification.
 
 ```bash
-soundness-cli send --proof-file <path-or-blob-id> --elf-file <path-or-blob-id> --key-name my-key --proving-system <sp1||ligetron||risc0>
+soundness-cli send [OPTIONS]
 ```
 
-Supported proving systems: `sp1`, `ligetron`, `risc0`.
+**Required Options:**
+- `--proof-file` / `-p`: Path to proof file or Walrus blob ID
+- `--key-name` / `-k`: Name of the signing key pair
+- `--proving-system` / `-s`: ZK proving system used
 
-The request will be signed using the specified key pair.
+**Optional Options:**
+- `--elf-file` / `-l`: Path to ELF file or Walrus blob ID
+- `--game` / `-g`: Predefined game type (alternative to ELF file)
+- `--payload` / `-d`: Additional JSON payload
+
+**Proving System Values:**
+- `sp1`: SP1 RISC-V based ZK-VM
+- `ligetron`: Ligetron high-performance prover
+- `risc0`: RISC Zero general-purpose ZK-VM
+- `noir`: Noir domain-specific language
+- `starknet`: StarkNet Ethereum L2 solution
+- `miden`: Miden VM stack-based ZK-VM
+
+**Game Type Values:**
+- `tic-tac-toe`, `tictactoe`: Tic-tac-toe game
+- `8-queens`, `8queens`, `eight-queens`, `eightqueens`: Eight queens puzzle
+
+### Keystore Management Commands
+
+#### load-key-store
+Work with keystore files in custom locations.
+
+```bash
+soundness-cli load-key-store --path <PATH> <SUBCOMMAND>
+```
+
+**Subcommands:**
+- `list-keys`: List all keys in the specified keystore
+- `show-mnemonic --name <KEY_NAME>`: Show mnemonic from the specified keystore
+
+## Security
+
+### Encryption Standards
+
+The CLI implements industry-standard cryptographic practices:
+
+**Key Storage:**
+- Algorithm: AES-256-GCM (Authenticated Encryption)
+- Key Derivation: PBKDF2-HMAC-SHA256
+- Iterations: 600,000 (exceeds OWASP recommendations)
+- Salt Length: 32 bytes (256 bits)
+- Nonce Length: 12 bytes (96 bits, GCM standard)
+
+**Digital Signatures:**
+- Algorithm: Ed25519 (Curve25519 + SHA-512)
+- Key Length: 32 bytes (256 bits)
+- Signature Length: 64 bytes (512 bits)
+
+**Mnemonic Generation:**
+- Standard: BIP39
+- Entropy: 256 bits (24 words)
+- Language: English wordlist
+
+### Security Best Practices
+
+1. **Password Requirements:**
+   - Use strong, unique passwords for key encryption
+   - Passwords are never stored or transmitted
+   - Consider using a password manager
+
+2. **Mnemonic Storage:**
+   - Write down mnemonic phrases on paper
+   - Store in multiple secure locations
+   - Never share or store electronically
+
+3. **Key Management:**
+   - Generate keys on secure, offline systems when possible
+   - Regularly backup keystore files
+   - Use different keys for different environments (test/prod)
+
+4. **Network Security:**
+   - Always verify endpoint URLs before submission
+   - Use HTTPS endpoints in production
+   - Monitor for suspicious network activity
+
+### Threat Model
+
+The CLI is designed to protect against:
+- **Local File Access**: Encrypted key storage prevents unauthorized access
+- **Network Interception**: HTTPS and signature verification prevent MITM attacks
+- **Key Compromise**: Mnemonic recovery allows key regeneration
+- **Brute Force**: High iteration count makes password cracking impractical
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `SOUNDNESS_ENDPOINT` | Default API endpoint | `https://testnet.soundness.xyz` |
+| `SOUNDNESS_KEYSTORE` | Default keystore file path | `./key_store.json` |
+
+### File Locations
+
+**Default Keystore:**
+- Location: `./key_store.json` (current directory)
+- Format: JSON with encrypted key pairs
+- Permissions: Readable by owner only (recommended)
+
+**Configuration Files:**
+- The CLI uses command-line arguments and environment variables
+- No persistent configuration file is required
+
+## Examples
+
+### Complete Workflow Example
+
+```bash
+# 1. Generate a new key pair
+soundness-cli generate-key --name demo-key
+
+# 2. List available keys
+soundness-cli list-keys
+
+# 3. Submit a proof for the eight queens game
+soundness-cli send \
+    --proof-file ./eight-queens-proof.bin \
+    --game 8-queens \
+    --key-name demo-key \
+    --proving-system ligetron \
+    --payload '{"solution": [0,4,7,5,2,6,1,3]}'
+
+# 4. Submit a custom program proof
+soundness-cli send \
+    --proof-file ./custom-proof.bin \
+    --elf-file ./custom-program.elf \
+    --key-name demo-key \
+    --proving-system sp1
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Key Generation Fails:**
+```
+Error: Failed to generate key pair
+```
+- Solution: Ensure sufficient entropy available on system
+- Check system permissions for file creation
+- Verify Rust crypto libraries are properly installed
+
+**Authentication Errors:**
+```
+Error: Invalid signature
+```
+- Verify key name exists: `soundness-cli list-keys`
+- Check password is correct when prompted
+- Ensure key hasn't been corrupted: try showing mnemonic
+
+**Network Connection Issues:**
+```
+Error: Failed to send request
+```
+- Verify endpoint URL is correct and accessible
+- Check network connectivity and firewall settings
+- Ensure endpoint supports HTTPS if using secure URLs
+
+**File Not Found Errors:**
+```
+Error: Failed to read proof file
+```
+- Verify file paths are correct and files exist
+- Check file permissions are readable
+- For blob IDs, ensure they are valid Walrus identifiers
+
+### Debug Mode
+
+Enable verbose logging by setting the RUST_LOG environment variable:
+
+```bash
+export RUST_LOG=debug
+soundness-cli send [options]
+```
+
+### Recovery Procedures
+
+**Lost Keystore File:**
+1. Locate mnemonic phrase backup
+2. Use `import-key` command to restore key
+3. Verify public key matches expected value
+
+**Forgotten Password:**
+1. Cannot be recovered - passwords are not stored
+2. Use mnemonic phrase to restore key with new password
+3. Update any dependent systems with new keystore
+
+**Corrupted Keystore:**
+1. Stop using corrupted keystore immediately
+2. Restore from mnemonic phrase backup
+3. Verify all keys are properly restored before resuming operations
+
+### Getting Help
+
+For additional support:
+- GitHub Issues: Report bugs and feature requests
+- Documentation: -
+- Community Discord: Real-time support and discussions
+
+---
+
+**Version:** 0.1.2  
+**License:** MIT  
+**Maintainer:** Soundness Layer Team
