@@ -17,7 +17,7 @@ The `soundnessup` tool manages your Soundness CLI installation and makes updates
 This command downloads and runs the `soundnessup` installer.
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/soundnesslabs/soundness-layer/main/soundnessup/install | bash
+curl -sSL https://raw.githubusercontent.com/SoundnessLabs/soundness-layer/main/soundnessup/install | bash
 ```
 
 **2. Update your shell environment:**
@@ -55,7 +55,8 @@ docker compose build
 docker compose run --rm soundness-cli [command]
 
 # Example: Generate a new key pair
-docker compos
+docker compose run --rm soundness-cli generate-key --name your-key-name
+```
 
 ### Manual Installation (from Source)
 
@@ -67,8 +68,6 @@ Navigate to the `soundness-cli` directory and run:
 ```bash
 cargo install --path .
 ```
-
-curl -sSL https://raw.githubusercontent.com/soundnesslabs/soundness-layer/main/soundnessup/install | bash
 
 ## Testnet Instructions
 
