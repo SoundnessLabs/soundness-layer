@@ -47,49 +47,70 @@ install_cli() {
     trap 'rm -rf "$TEMP_DIR"' EXIT
     
     # Clone the repository
-    git clone --depth 1 https://github.com/$REPO.git "$TEMP_DIR"
+    print_message "Cloning repository..." "$YELLOW"
+    git clone https://github.com/$REPO.git "$TEMP_DIR" > /dev/null 2>&1
+
+    cd "$TEMP_DIR"
+
+    # Get the latest tag
+    LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1`)
+    print_message "Latest version is $LATEST_TAG. Checking out..." "$YELLOW"
+
+    git checkout "$LATEST_TAG" > /dev/null 2>&1
     
     # Build the CLI
+    print_message "Building the CLI (this may take a few minutes)..." "$YELLOW"
     cd "$TEMP_DIR/soundness-cli"
-    cargo build --release
+    cargo build --release > /dev/null 2>&1
     
     # Copy the binary to the bin directory
     mkdir -p "$SOUNDNESS_BIN_DIR"
     cp target/release/$CLI_BINARY "$CLI_BINARY_PATH"
     
-    print_message "✅ Installation complete!" "$GREEN"
+    print_message "✅ Installation of $LATEST_TAG complete!" "$GREEN"
 }
 
 # Function to update the CLI
 update_cli() {
     print_message "🔄 Checking for updates..." "$YELLOW"
     
-    # Create temporary directory for building
+    # Create temporary directory for cloning
     TEMP_DIR=$(mktemp -d)
     trap 'rm -rf "$TEMP_DIR"' EXIT
     
     # Clone the repository
-    git clone --depth 1 https://github.com/$REPO.git "$TEMP_DIR"
+    git clone https://github.com/$REPO.git "$TEMP_DIR" > /dev/null 2>&1
     
-    # Get the latest version
-    LATEST_VERSION=$(cd "$TEMP_DIR" && git describe --tags --abbrev=0 2>/dev/null || echo "v$VERSION")
-    
-    if [ "$LATEST_VERSION" = "v$VERSION" ]; then
-        print_message "✅ You're already using the latest version ($VERSION)" "$GREEN"
+    cd "$TEMP_DIR"
+    # Get the latest tag
+    LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1`)
+
+    # Get the current version if it exists
+    if [ -f "$CLI_BINARY_PATH" ]; then
+        CURRENT_VERSION=$($CLI_BINARY_PATH --version | awk '{print $2}')
+    else
+        CURRENT_VERSION="0.0.0" # Not installed
+    fi
+
+    if [ "v$CURRENT_VERSION" = "$LATEST_TAG" ]; then
+        print_message "✅ You're already using the latest version ($CURRENT_VERSION)" "$GREEN"
         return
     fi
     
-    print_message "📦 Updating to $LATEST_VERSION..." "$YELLOW"
+    print_message "📦 Updating from $CURRENT_VERSION to $LATEST_TAG..." "$YELLOW"
     
+    git checkout "$LATEST_TAG" > /dev/null 2>&1
+
     # Build the CLI
+    print_message "Building the CLI (this may take a few minutes)..." "$YELLOW"
     cd "$TEMP_DIR/soundness-cli"
-    cargo build --release
+    cargo build --release > /dev/null 2>&1
     
     # Copy the binary to the bin directory
     mkdir -p "$SOUNDNESS_BIN_DIR"
     cp target/release/$CLI_BINARY "$CLI_BINARY_PATH"
     
-    print_message "✅ Update complete!" "$GREEN"
+    print_message "✅ Update to $LATEST_TAG complete!" "$GREEN"
 }
 
 # Function to show help
